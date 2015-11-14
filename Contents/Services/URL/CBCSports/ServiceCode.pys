@@ -1,0 +1,41 @@
+FEED_URL = "http://tpfeed.cbc.ca/f/ExhSPC/vms_5akSXx4Ng_Zn?q=*&byGuid=%s"
+SMIL_PARAMS = "?manifest=m3u&feed=iOS%20News%20app%20feed&format=smil&mbr=true"
+#AudioStreamObject.language_code = Locale.Language.English
+####################################################################################################
+def NormalizeURL(url):
+	Log(url)
+	return url
+
+####################################################################################################
+def MetadataObjectForURL(url):
+	page 	= HTML.ElementFromURL(url)
+	title 	= page.xpath('//meta[@property="og:title"]')[0].get('content')
+	summary = page.xpath('//meta[@property="og:description"]')[0].get('content')
+	thumb 	= page.xpath('//meta[@property="og:image"]')[0].get('content')
+	date 	= page.xpath('//meta[@property="video:release_date"]')[0].get('content')
+	
+	return VideoClipObject(
+		title 			= title,
+		summary			= summary,
+		originally_available_at	= Datetime.ParseDate(date).date(),
+		thumb			= thumb
+	)
+
+####################################################################################################
+def MediaObjectsForURL(url):
+	return [
+		MediaObject(
+			parts=[PartObject(key=HTTPLiveStreamURL(Callback(PlayHLS, url=url)))]
+		)
+	]
+
+####################################################################################################
+@indirect
+def PlayHLS(url):
+	vid = url.split('/')[-1]
+	feed = JSON.ObjectFromURL(FEED_URL % vid)
+	content_url = feed['entries'][0]['content'][0]['url']
+	smil_url = content_url.split('?')[0] + SMIL_PARAMS
+	smil = XML.ElementFromURL(smil_url)
+	m3u8_url = smil.xpath('//a:video', namespaces={'a':"http://www.w3.org/2005/SMIL21/Language"})[0].get('src')
+	return IndirectResponse(VideoClipObject, key=m3u8_url)
